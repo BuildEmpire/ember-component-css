@@ -2,8 +2,7 @@
 
 An Ember CLI addon which allows you to specify component-specific style sheets in an app, addon, engine, or in-repo addon.
 
-Contributions are welcome! Feel free to open up a pull request or issue, and join the [#e-component-css](https://embercommunity.slack.com/messages/e-component-css/) channel in the [Ember Slack community](https://ember-community-slackin.herokuapp.com/) if you have further questions, concerns, or ideas. Thanks! :smile:
-
+Contributions are welcome! Feel free to open up a pull request or issue, and join the **#e-component-css** channel on the [official Ember Discord server](https://discord.gg/zT3asNS) if you have further questions, concerns, or ideas. Thanks! :smile:
 
 ## Installation
 
@@ -71,9 +70,9 @@ To use this addon you *MUST*, import `pod-styles` into your base stylesheet.
 @import 'pod-styles'
 ```
 
-```scss
-// app/styles/app.css
-@import "pod-styles";
+```css
+/* app/styles/app.css */
+@import "pod-styles.css";
 ```
 
 And that is it! The `pod-styles` file is generated during the build and will then be pulled into your other stylesheet to be processed like normal.
@@ -83,6 +82,27 @@ Note: If you are using more than one type of component style files (ie a .less f
 ### Usage with pods structure
 
 To use this with pods, you just need to include a style file in your component pods directory alongside your `template.hbs` or `component.js` files.
+
+### Usage with routes
+
+To use this with routes you need to use pods for the routes and modify the `application.hbs` template a little bit.
+Let's assume your `application.hbs` template looks like this:
+
+```hbs
+{{outlet}}
+```
+
+To be able to use this for routes, you need to add a wrapping `div` around the outlet:
+
+```hbs
+<div class={{routeStyleNamespaceClassSet}}>
+  {{outlet}}
+</div>
+```
+
+After that it's quite easy: add a style file in your route directory alongside your `route.js` or `template.hbs` files.
+
+An individual controller also has access to a `styleNamespace` property that is the namespace for a given route. This can be used for various use cases. (like enabling BEM style similar to how the `styleNamespace` is used in a component)
 
 ### Usage with classic (non pod) structure
 
@@ -96,13 +116,13 @@ the same component both are included but the pod style will take precedence.
 ### Use in addons
 In order to use this inside of an addon, you need to add your style files inside of the components in the
 addon directory. You will then be able to import the 'pod-styles' file inside of your addon style file which
-is in the `/addon/styles` directory. These styles will then be added to the `vendor.css` file like normal. 
+is in the `/addon/styles` directory. These styles will then be added to the `vendor.css` file like normal.
 
 If you are using classic (non pod) structure, your addon directory structure might look like:
 ```
 yourAddonDirectory
 │   index.js
-│   ... etc    
+│   ... etc
 └───addon
 │   └───components
 │       │   yourAddonComponent.js
@@ -125,7 +145,23 @@ If you are extending the `include` method in your addon, please make sure you ca
   }
 ```
 
-Finally, be sure "ember-component-css" is listed under the "dependencies" key of your addon's `package.json` file, rather than "devDependencies".
+Finally, be sure "ember-component-css" is listed under the "dependencies" key of your addon's `package.json` file, rather than "devDependencies". Additionally, if your addon is compiling the expected CSS into the host's `vendor.css` output, but the expected classes are not being set on your components' HTML elements, you will need to [run your addon _after_ ember-component-css](https://ember-cli.com/extending/#configuring-your-ember-addon-properties):
+```js
+// package.json
+{
+  // ...
+  "dependencies": {
+    // ...
+    "ember-component-css": ">= 0.6.4",
+    // ...
+  },
+  // ...
+  "ember-addon": {
+    "configPath": "tests/dummy/config",
+    "after": "ember-component-css"
+  }
+}
+```
 
 ### Plain css usage
 In order to use this with plain css files, you need to install [`ember-cli-postcss`](https://github.com/jeffjewiss/ember-cli-postcss) and configure it with [`postcss-import`](https://github.com/postcss/postcss-import).
@@ -163,18 +199,18 @@ postcss plugins in this way too.
 
 ### Getting the generated class name
 
-You also have access to the generated class name to use in your templates. There is a computed property `componentCssClassName` This can be used to pass the class name to things like [`ember-wormhole`](https://github.com/yapplabs/ember-wormhole) or for use in BEM style classnames.
+You also have access to the generated class name to use in your templates. There is a computed property `styleNamespace` This can be used to pass the class name to things like [`ember-wormhole`](https://github.com/yapplabs/ember-wormhole) or for use in BEM style classnames.
 An example of BEM usage would be
 
 `my-component/template.hbs`
 ```handlebars
-<button class="{{componentCssClassName}}__button">
+<button class="{{styleNamespace}}__button">
   Normal button
 </button>
-<button class="{{componentCssClassName}}__button {{componentCssClassName}}__button--state-success">
+<button class="{{styleNamespace}}__button {{styleNamespace}}__button--state-success">
 	Success button
 </button>
-<button class="{{componentCssClassName}}__button {{componentCssClassName}}__button--state-danger">
+<button class="{{styleNamespace}}__button {{styleNamespace}}__button--state-danger">
 	Danger button
 </button>
 ```
@@ -200,17 +236,19 @@ An example of BEM usage would be
 }
 ```
 
+*`componentCssClassName` will be officially deprecated, then removed in future versions. Will be migrating to the more appropriately named `styleNamespace`*
+
 #### Using the generated class name in `classNameBindings`
 
-You can build your own computed properties on top of `componentCssClassName`. One use case is using it to build a `classNameBinding`:
+You can build your own computed properties on top of `styleNamespace`. One use case is using it to build a `classNameBinding`:
 
 `my-component/component.hbs`
 ```js
 classNameBindings: ['customBinding'],
   stateProperty: false,
-  customBinding: computed('componentCssClassName', 'stateProperty', function() {
-    if (this.get('stateProperty') {
-      return `${this.get('componentCssClassName')}--state`;
+  customBinding: computed('styleNamespace', 'stateProperty', function() {
+    if (this.get('stateProperty')) {
+      return `${this.get('styleNamespace')}--state`;
     } else {
       return '';
     }
@@ -225,6 +263,10 @@ classNameBindings: ['customBinding'],
   background: red;
 }
 ```
+
+### Special Tag-less components
+
+On the special cases of tag-less components (this functionality is used putting a `tagName: ''` value in the component), the styles are not attached to the DOM, as this addon needs a tag to attach the generated class name. In those special cases, you can use the `styleNamespace`* classname if you want to attach to a another element in the application (or more coherently inside the tag-less component).
 
 ### Configuration
 
@@ -246,10 +288,10 @@ ENV['ember-component-css'] = {
 }
 ```
 
-This changes the default behavior changes in two ways:
+This changes the default behavior in two ways:
 
  1. The autogenerated component class is no longer added to your component's HTML
- 2. Your pod CSS files are no longer are namespaced using the autogenerated component class.
+ 2. Your pod CSS files are no longer namespaced using the autogenerated component class.
 
 **classicStyleDir**
 
@@ -262,6 +304,38 @@ ENV['ember-component-css'] = {
 }
 ```
 
+**excludeFromManifest**
+
+Defaults to `[]`. Set this option to one or more matcher expression (regular expression, glob string, or function).
+Style files matching the expresion(s) will be namespaced but not imported in the `pod-styles` manifest. You will
+need to import the matching style files manually in your CSS. This can be useful when you need to control the order
+in which specific style files need to be imported.
+
+Example:
+You want to have a separate style file for each media-query breakpoint. You want to be sure that `_style-1366.scss`
+will be imported before `_style-960.scss`
+
+```
+.
+└── my-component/
+    ├── _style-1366.scss
+    ├── _style-960.scss
+    ├── main.scss
+    ├── component.js
+    └── template.hbs
+```
+
+```sass
+// main.scss
+@import "./_style-1366"
+@import "./_style-960"
+```
+
+```js
+ENV['ember-component-css'] = {
+  excludeFromManifest: ['**/_style-*']
+}
+```
 
 ### [The announcement from EmberConf 2015](https://youtu.be/T1zxaEKeq3E)
 [![CSS is hard - EmberConf 2015](http://f.cl.ly/items/1a3a3r1C1y0D060D3j3u/EmberConf%202015%20-%20CSS%20Is%20Hard%20-%20YouTube%202015-03-22%2018-33-41.jpg)](https://youtu.be/T1zxaEKeq3E)

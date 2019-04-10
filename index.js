@@ -1,4 +1,3 @@
-/* eslint-env node */
 'use strict';
 
 var Funnel = require('broccoli-funnel');
@@ -6,6 +5,8 @@ var Merge = require('broccoli-merge-trees');
 var ProcessStyles = require('./lib/pod-style.js');
 var ExtractNames = require('./lib/pod-names.js');
 var StyleManifest = require('broccoli-style-manifest');
+var Replace = require('broccoli-replace');
+let VersionChecker = require("ember-cli-version-checker");
 
 module.exports = {
 
@@ -122,12 +123,50 @@ module.exports = {
         annotation: 'Merge (ember-component-css merge names with addon tree)'
       });
     }
+    let checker = new VersionChecker(this);
+    let ember = checker.forEmber();
+    let superTree = this._super.treeForAddon.call(this, tree);
+    if (ember.isAbove('3.6.0')) {
+      return new Funnel(superTree, {
+        exclude: ['ember-component-css/initializers/route-styles.js'],
+        annotation:
+          "Funnel (ember-component-css exclude addon/initializers/route-styles.js in 3.6+)"
+      });
+    } else {
+      return new Funnel(superTree, {
+        exclude: ["ember-component-css/instance-initializers/route-styles.js"],
+        annotation:
+          "Funnel (ember-component-css exclude addon/instance-initializers/route-styles.js in < 3.6)"
+      });
+    }
+  },
 
-    return this._super.treeForAddon.call(this, tree);
+  treeForApp: function(tree) {
+    let checker = new VersionChecker(this);
+    let ember = checker.forEmber();
+    if (ember.isAbove('3.6.0')) {
+      return new Funnel(tree, {
+        exclude: ["initializers/route-styles.js"],
+        annotation:
+          "Funnel (ember-component-css exclude app/initializers/route-styles.js in 3.6+)"
+      });
+    } else {
+      return new Funnel(tree, {
+        exclude: ["instance-initializers/route-styles.js"],
+        annotation:
+          "Funnel (ember-component-css exclude app/instance-initializers/route-styles.js in < 3.6)"
+      });
+    }
   },
 
   treeForParentAddonStyles: function(tree) {
-    return this.processComponentStyles(tree);
+    let defaultTree = tree;
+
+    if (this.parent.treeForAddonStyles) {
+      defaultTree = this.parent.treeForAddonStyles.apply(this.parent, arguments);
+    }
+
+    return this.processComponentStyles(defaultTree);
   },
 
   treeForStyles: function(tree) {
@@ -150,9 +189,23 @@ module.exports = {
       });
     }
 
-    var styleManifest = new StyleManifest(podStyles, {
+    var podStylesWithoutExcluded = new Funnel(podStyles, {
+      exclude: this.addonConfig.excludeFromManifest || [],
+      annotation: 'Funnel (ember-component-css exclude style files from manifest)'
+    });
+
+    var styleManifest = new StyleManifest(podStylesWithoutExcluded, {
       outputFileNameWithoutExtension: 'pod-styles',
       annotation: 'StyleManifest (ember-component-css combining all style files that there are extensions for)'
+    });
+
+    // this is due to sass spcifically not allowing for ANY semicolons.
+    styleManifest = new Replace(styleManifest, {
+      files: ['**/*.sass'],
+      patterns: [{
+        match: /;/g,
+        replacement: '',
+      }],
     });
 
     tree = new Merge([podStyles, styleManifest, tree].filter(Boolean), {
@@ -162,5 +215,5 @@ module.exports = {
     return tree;
   },
 
-  name: 'ember-component-css'
+  name: require('./package').name
 };
